@@ -61,6 +61,11 @@ ControllerNode::ControllerNode(const ros::NodeHandle& nhPrivate)
 void ControllerNode::trajectoryCallback(const nav_msgs::Path::ConstPtr& trajectoryMsg) {
     trajectoryStamp_ = ros::Time::now();
     trajectory_ = conversions::trajectoryMsgToTrajectory(trajectoryMsg);
+    // 保存终点的位置
+    if (!trajectory_->empty()) {
+        endPoint_ = trajectory_->back().pose;
+    }
+    
 }
 
 void ControllerNode::controlLoopCallback(const ros::TimerEvent& timerEvent) {
@@ -85,6 +90,19 @@ void ControllerNode::controlLoopCallback(const ros::TimerEvent& timerEvent) {
         }
     }
 
+    Pose vehiclePose;
+    if (currentVehiclePose(vehiclePose)) {
+        // 计算小车当前位置与终点位置的距离
+        double distanceToEndPoint = std::hypot(vehiclePose.x - endPoint_.x, vehiclePose.y - endPoint_.y);
+
+        // 判断小车是否到达终点
+        if (distanceToEndPoint <100) {
+            // 到达终点，重新发布路径
+            republishTrajectory(trajectory_->poses);
+            // 将当前路径索引重置为0
+            currentTrajectoryIndex_ = 0;
+        }
+    }
     if (!checkTrajectoryExists()) {
         return;
     }
@@ -250,6 +268,15 @@ void ControllerNode::yoloCallback(const detection_msgs::BoundingBoxes::ConstPtr&
 
                 }
             }
+            // if(bbox,Class=="trafficcone"){
+            //     if(i==2){
+            //         double distance =bbox.distance;
+            //         if(distance<500.0){
+
+            //         }
+
+            //     }
+            // }
         }
     }
 
@@ -267,6 +294,29 @@ void ControllerNode::yoloCallback(const detection_msgs::BoundingBoxes::ConstPtr&
 void ControllerNode::startVehicle() {
         isVehicleStarted = true;
         vehicleStartTime = ros::Time::now();
+        // int i=0;
+        // i=i++;
 }
+void ControllerNode::republishTrajectory(const std::vector<Pose>& trajectoryPoses) {
+    // 创建一个新的路径消息
+    nav_msgs::Path newTrajectoryMsg;
+    // 设置新路径消息的内容
+    newTrajectoryMsg.header.frame_id = interface_.map_frame;
+    newTrajectoryMsg.header.stamp = ros::Time::now();
+    newTrajectoryMsg.poses.resize(trajectoryPoses.size());
 
+    // 将传入的路径位置信息复制给新路径消息
+    for (size_t i = 0; i < trajectoryPoses.size(); ++i) {
+        newTrajectoryMsg.poses[i].header.frame_id = interface_.map_frame;
+        newTrajectoryMsg.poses[i].header.stamp = ros::Time::now();
+        newTrajectoryMsg.poses[i].pose.position.x = trajectoryPoses[i].x;
+        newTrajectoryMsg.poses[i].pose.position.y = trajectoryPoses[i].y;
+    }
+
+    // 重新发布新路径消息
+    interface_.trajectory_publisher.publish(newTrajectoryMsg);
+
+    // 更新当前路径索引为路径中的最后一个点的索引
+    currentTrajectoryIndex_ = trajectoryPoses.size() - 1;
+}
 } // namespace kal_controller_ros_tool

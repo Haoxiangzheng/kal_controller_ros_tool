@@ -70,6 +70,10 @@ private:
      * @return True if trajectory time stamp is valid, false if it is too old
      */
     bool checkTrajectoryAge() const;
+    Pose endPoint_;
+    //记录当前路径的索引
+    
+    int currentTrajectoryIndex_{};
 
     /**
      * @brief Check that trajectory has the minimum required length.
@@ -94,6 +98,7 @@ private:
     void stopVehicle();
     void yoloCallback(const detection_msgs::BoundingBoxes::ConstPtr& msg);
     void startVehicle();
+    void republishTrajectory();
 
     Controller controller_{};
     std::optional<Trajectory> trajectory_{std::nullopt};
